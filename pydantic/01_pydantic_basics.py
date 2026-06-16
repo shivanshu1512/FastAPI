@@ -1,52 +1,50 @@
 """
-01 — Why Pydantic? Basic Model Definition
-==========================================
-Demonstrates how Pydantic replaces manual data validation with
-a clean, declarative approach using BaseModel and Field types.
+Pydantic Basics — BaseModel, Field & Type Validation
+=====================================================
+When I first started learning FastAPI, I kept seeing Pydantic everywhere.
+This file is my practice of the core building blocks:
 
-Key concepts:
-  - BaseModel           : base class for all Pydantic models
-  - Field()             : add constraints and metadata to fields
-  - Annotated           : attach Field metadata without changing the type
-  - EmailStr / AnyUrl   : built-in string types with format validation
-  - Optional            : mark a field as not required
+Things I tried here:
+  - BaseModel     : the base class every model inherits from
+  - Field()       : add constraints (min, max, gt, lt) and docs to a field
+  - Annotated     : cleaner way to attach Field metadata to a type
+  - EmailStr      : validates proper email format automatically
+  - AnyUrl        : validates proper URL format automatically
+  - Optional      : fields that are not always required
 """
 
 from pydantic import BaseModel, EmailStr, AnyUrl, Field
 from typing import List, Dict, Optional, Annotated
 
 
-# ──────────────────────────────────────────────
-# Model Definition
-# ──────────────────────────────────────────────
-
 class Patient(BaseModel):
-    """Represents a patient with validated personal and medical data."""
+    """
+    My first Pydantic model — a Patient with real-world constraints.
+    Pydantic validates every field when I create an instance.
+    """
 
     name: Annotated[
         str,
         Field(
             max_length=50,
             title="Patient Name",
-            description="Full name of the patient (≤ 50 characters).",
+            description="Full name of the patient, max 50 characters.",
             examples=["Aarav Sharma", "Priya Patel"],
         ),
     ]
-    email: EmailStr                            # must be a valid email format
-    linkedin_url: AnyUrl                       # must be a valid URL
-    age: int = Field(gt=0, lt=120)             # 1–119 years
-    weight: Annotated[float, Field(gt=0, strict=True)]  # kg, strict=no coercion
+    email: EmailStr                             # rejects "notanemail" automatically
+    linkedin_url: AnyUrl                        # rejects "not-a-url" automatically
+    age: int = Field(gt=0, lt=120)              # 1–119, raises error outside range
+    weight: Annotated[float, Field(gt=0, strict=True)]  # strict=True: no int→float coercion
     married: Annotated[
         Optional[bool],
-        Field(default=None, description="Marital status; None means unknown."),
+        Field(default=None, description="None = not recorded yet"),
     ]
-    allergies: Optional[List[str]] = None      # list of allergy names
-    contact_details: Dict[str, str] = {}       # e.g. {"phone": "9876543210"}
+    allergies: Optional[List[str]] = None
+    contact_details: Dict[str, str] = {}
 
 
-# ──────────────────────────────────────────────
-# Demo
-# ──────────────────────────────────────────────
+# ── Try it out ───────────────────────────────────────────────────────────────
 
 patient_data = {
     "name": "Aarav Sharma",

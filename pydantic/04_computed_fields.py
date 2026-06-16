@@ -1,52 +1,49 @@
 """
-04 — Computed Fields
-=====================
-Demonstrates how to add read-only, derived attributes to a Pydantic
-model using @computed_field + @property.
+Computed Fields — Auto-Derived Properties
+==========================================
+Instead of calculating BMI manually every time I use the model,
+I can use @computed_field to make it a permanent part of the model.
 
-The computed value is:
-  - NOT accepted as input (ignored if passed)
-  - Automatically re-calculated from other fields
-  - Included in serialisation (model_dump / model_dump_json)
+The cool thing: Pydantic treats it like a real field —
+it shows up in model_dump() and model_dump_json() automatically.
+I never need to pass it as input; it's always calculated fresh.
 
-Key concepts:
-  - @computed_field  : marks a property as a Pydantic-managed field
-  - @property        : makes it accessible as an attribute, not a method
-  - Return type hint : required for Pydantic to infer the schema correctly
+I used this concept a lot in my FastAPI patient API (main.py).
 """
 
 from pydantic import BaseModel, EmailStr, computed_field
 from typing import List, Dict, Literal
 
 
-# ──────────────────────────────────────────────
-# Model
-# ──────────────────────────────────────────────
-
 class Patient(BaseModel):
-    """Patient model with auto-computed BMI and health verdict."""
-
     name: str
     email: EmailStr
     age: int
-    weight: float   # kilograms
-    height: float   # metres
+    weight: float   # in kg
+    height: float   # in metres
     married: bool
     allergies: List[str] = []
     contact_details: Dict[str, str] = {}
 
-    # ── computed field: BMI ───────────────────
     @computed_field  # type: ignore[misc]
     @property
     def bmi(self) -> float:
-        """Body Mass Index = weight (kg) / height² (m²), rounded to 2 d.p."""
+        """
+        BMI = weight(kg) / height²(m)
+        Rounded to 2 decimal places.
+        """
         return round(self.weight / (self.height ** 2), 2)
 
-    # ── computed field: WHO weight category ──
     @computed_field  # type: ignore[misc]
     @property
     def weight_category(self) -> Literal["Underweight", "Normal", "Overweight", "Obese"]:
-        """WHO BMI classification."""
+        """
+        WHO BMI classification:
+        < 18.5  → Underweight
+        < 25.0  → Normal
+        < 30.0  → Overweight
+        ≥ 30.0  → Obese
+        """
         if self.bmi < 18.5:
             return "Underweight"
         if self.bmi < 25.0:
@@ -56,23 +53,18 @@ class Patient(BaseModel):
         return "Obese"
 
 
-# ──────────────────────────────────────────────
-# Helper: apply a partial update and re-display
-# ──────────────────────────────────────────────
-
-def update_patient(patient: Patient, **updates) -> Patient:
+def update_patient(patient: Patient, **changes) -> Patient:
     """
-    Return a new Patient with selected fields updated.
-    Computed fields (bmi, weight_category) are recalculated automatically.
+    Helper I wrote to partially update a patient.
+    Since computed fields recalculate automatically, bmi and
+    weight_category will always reflect the latest values.
     """
-    current = patient.model_dump()
-    current.update(updates)
-    return Patient(**current)
+    data = patient.model_dump()
+    data.update(changes)
+    return Patient(**data)
 
 
-# ──────────────────────────────────────────────
-# Demo
-# ──────────────────────────────────────────────
+# ── Try it out ───────────────────────────────────────────────────────────────
 
 p = Patient(
     name="Divya Menon",
@@ -85,13 +77,14 @@ p = Patient(
     contact_details={"phone": "9444444444"},
 )
 
-print("── Original patient ───────────────────────")
+print("── Original ─────────────────────────────────")
 print(f"BMI             : {p.bmi}")
 print(f"Weight Category : {p.weight_category}")
-print(p.model_dump_json(indent=2))
 
-# Simulate weight gain and see category change
+print("\n── After gaining weight (92 kg) ─────────────")
 p2 = update_patient(p, weight=92.0)
-print("\n── After weight update (92 kg) ────────────")
 print(f"BMI             : {p2.bmi}")
 print(f"Weight Category : {p2.weight_category}")
+
+print("\n── Full JSON output ─────────────────────────")
+print(p.model_dump_json(indent=2))

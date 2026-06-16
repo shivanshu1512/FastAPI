@@ -1,34 +1,26 @@
 """
-02 — Field Validators
-======================
-Demonstrates how to add custom per-field validation logic using
-the @field_validator decorator.
+Field Validators — Custom Per-Field Rules
+==========================================
+I learned that Pydantic's built-in types (EmailStr, int, float) handle
+format and range — but sometimes I need my OWN business logic.
 
-Key concepts:
-  - @field_validator      : validate (or transform) a single field
-  - @classmethod          : field validators are always class methods
-  - raise ValueError      : triggers a Pydantic ValidationError
-  - return value          : must return the (possibly transformed) value
+That's where @field_validator comes in. It lets me write a function
+that runs on a specific field after the basic type check passes.
+
+Two validators I wrote here:
+  1. validate_email_domain  — only allow corporate email addresses
+  2. capitalise_name        — auto title-case the patient's name
 """
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import List, Dict, Optional, Annotated
 
 
-# ──────────────────────────────────────────────
-# Allowed domains for institutional patients
-# ──────────────────────────────────────────────
+# Only these corporate domains are accepted in my system
+ALLOWED_DOMAINS = frozenset({"hdfc.com", "icici.com", "sbi.co.in"})
 
-VALID_EMAIL_DOMAINS = frozenset({"hdfc.com", "icici.com", "sbi.co.in"})
-
-
-# ──────────────────────────────────────────────
-# Model
-# ──────────────────────────────────────────────
 
 class Patient(BaseModel):
-    """Patient with a custom e-mail domain validator."""
-
     name: Annotated[str, Field(min_length=2, max_length=50)]
     email: EmailStr
     age: Annotated[int, Field(gt=0, lt=120)]
@@ -37,34 +29,36 @@ class Patient(BaseModel):
     allergies: List[str] = []
     contact_details: Dict[str, str] = {}
 
-    # ── field-level validator ──────────────────
     @field_validator("email")
     @classmethod
     def validate_email_domain(cls, value: str) -> str:
-        """Accept only corporate e-mail addresses from known institutions."""
+        """
+        I only want patients from partner institutions.
+        Extract the domain and check against my allowed list.
+        """
         domain = value.split("@")[-1].lower()
-        if domain not in VALID_EMAIL_DOMAINS:
+        if domain not in ALLOWED_DOMAINS:
             raise ValueError(
-                f"E-mail domain '{domain}' is not allowed. "
-                f"Accepted: {', '.join(sorted(VALID_EMAIL_DOMAINS))}"
+                f"'{domain}' is not an accepted domain. "
+                f"Allowed: {', '.join(sorted(ALLOWED_DOMAINS))}"
             )
         return value
 
-    # ── field-level validator ──────────────────
     @field_validator("name")
     @classmethod
     def capitalise_name(cls, value: str) -> str:
-        """Ensure the patient name is title-cased (e.g. 'ravi mehta' → 'Ravi Mehta')."""
+        """
+        Normalise the name — strip whitespace and title-case it.
+        e.g. "  ravi mehta  " → "Ravi Mehta"
+        """
         return value.strip().title()
 
 
-# ──────────────────────────────────────────────
-# Demo
-# ──────────────────────────────────────────────
+# ── Try it out ───────────────────────────────────────────────────────────────
 
-# ✅ Valid patient
-valid_patient = Patient(
-    name="ravi mehta",          # will be title-cased automatically
+print("✅ Valid patient (corporate email):")
+p = Patient(
+    name="ravi mehta",          # will be cleaned to "Ravi Mehta"
     email="ravi@hdfc.com",
     age=32,
     weight=74.0,
@@ -72,15 +66,13 @@ valid_patient = Patient(
     allergies=["aspirin"],
     contact_details={"phone": "9000000001"},
 )
-print("✅ Valid patient created:")
-print(valid_patient)
+print(p)
 
-# ❌ Invalid domain — will raise ValidationError
-print("\n❌ Attempting invalid email domain…")
+print("\n❌ Invalid email domain — should raise an error:")
 try:
     Patient(
         name="Sneha Iyer",
-        email="sneha@gmail.com",   # not an allowed domain
+        email="sneha@gmail.com",   # personal email, not allowed
         age=27,
         weight=58.0,
         married=False,

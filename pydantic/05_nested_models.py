@@ -1,27 +1,25 @@
 """
-05 — Nested Models
-===================
-Demonstrates how to compose complex schemas by embedding one
-Pydantic model inside another.
+Nested Models — Models Inside Models
+======================================
+Real-world data is structured, not flat. A patient has an address.
+An address is its own thing with its own fields.
 
-Key concepts:
-  - Nested BaseModel    : a field whose type is itself a BaseModel
-  - model_dump()        : serialize the full nested structure to dict
-  - model_dump_json()   : serialize to JSON string
-  - Validation cascade  : inner model is validated before the outer one
+Instead of stuffing city/state/pin directly into Patient, I can create
+a separate Address model and use it as a field type.
+
+Pydantic validates nested models recursively — if Address fails,
+the whole Patient creation fails with a clear error message.
+
+I can also pass the nested model as a plain dict — Pydantic
+converts it automatically. Very handy!
 """
 
 from pydantic import BaseModel, Field
 from typing import Literal, Optional
 
 
-# ──────────────────────────────────────────────
-# Inner Models
-# ──────────────────────────────────────────────
-
 class Address(BaseModel):
-    """Physical address with Indian postal format."""
-
+    """Represents an Indian postal address."""
     street: Optional[str] = None
     city: str
     state: str
@@ -29,64 +27,40 @@ class Address(BaseModel):
 
 
 class EmergencyContact(BaseModel):
-    """Emergency contact details."""
-
+    """Someone to call if the patient is in critical condition."""
     name: str
     relationship: str
     phone: str = Field(pattern=r"^\d{10}$", description="10-digit mobile number")
 
 
-# ──────────────────────────────────────────────
-# Outer Model
-# ──────────────────────────────────────────────
-
 class Patient(BaseModel):
-    """Full patient record with nested address and emergency contact."""
-
+    """Full patient record — uses Address and EmergencyContact as nested models."""
     name: str
     gender: Literal["male", "female", "other"]
     age: int = Field(gt=0, lt=120)
-    address: Address                              # nested model
+    address: Address                               # nested model
     emergency_contact: Optional[EmergencyContact] = None  # optional nested
 
 
-# ──────────────────────────────────────────────
-# Demo
-# ──────────────────────────────────────────────
+# ── Try it out ───────────────────────────────────────────────────────────────
 
-# Build nested objects step by step
-home_address = Address(
-    street="12, MG Road",
-    city="Gurgaon",
-    state="Haryana",
-    pin="122001",
-)
+# Build nested objects first, then compose
+home = Address(street="12, MG Road", city="Gurgaon", state="Haryana", pin="122001")
+ec   = EmergencyContact(name="Sunita Kumar", relationship="spouse", phone="9800000001")
 
-ec = EmergencyContact(
-    name="Sunita Kumar",
-    relationship="spouse",
-    phone="9800000001",
-)
+p1 = Patient(name="Nitish Kumar", gender="male", age=35, address=home, emergency_contact=ec)
 
-patient1 = Patient(
-    name="Nitish Kumar",
-    gender="male",
-    age=35,
-    address=home_address,
-    emergency_contact=ec,
-)
+print("── Patient as dict ─────────────────────────")
+print(p1.model_dump())
 
-print("── Full patient (dict) ─────────────────────")
-print(patient1.model_dump())
+print("\n── Patient as JSON ─────────────────────────")
+print(p1.model_dump_json(indent=2))
 
-print("\n── Full patient (JSON) ─────────────────────")
-print(patient1.model_dump_json(indent=2))
-
-# Nested model can also be passed as a plain dict — Pydantic handles it
-patient2 = Patient(
+# Pydantic also accepts nested model as a plain dict — very convenient
+p2 = Patient(
     name="Anita Joshi",
     gender="female",
     age=29,
     address={"city": "Pune", "state": "Maharashtra", "pin": "411001"},
 )
-print("\n── Patient 2 address city:", patient2.address.city)
+print(f"\n── Patient 2 city : {p2.address.city}")
