@@ -1,4 +1,4 @@
-# FastAPI Demo — Professional Edition
+# FastAPI 
 
 > A clean, well-structured FastAPI project covering **Patient Management** and **Insurance Premium Prediction** with a machine learning model.
 
